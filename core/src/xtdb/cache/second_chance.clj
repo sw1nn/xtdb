@@ -4,7 +4,7 @@
            java.util.function.Function
            [java.util Map$Entry Queue]
            [java.util.concurrent ConcurrentHashMap LinkedBlockingQueue Semaphore ThreadLocalRandom]
-           java.util.concurrent.atomic.AtomicReference)
+           java.util.concurrent.atomic.AtomicLong)
   (:require [xtdb.system :as sys]
             [xtdb.cache.nop]))
 
@@ -109,7 +109,7 @@
                      (.offer cooling vp))
             (.unswizzle vp (.getKey e))))))))
 
-(def ^:private ^AtomicReference free-memory-ratio (AtomicReference. 1.0))
+(def ^:private ^AtomicLong free-memory-ratio (AtomicLong. 50))
 (def ^:private ^:const free-memory-check-interval-ms 1000)
 
 (defn- free-memory-loop []
@@ -120,7 +120,7 @@
               used-memory (-  (.totalMemory runtime)
                               (.freeMemory runtime))
               free-memory (- max-memory used-memory)]
-          (.set free-memory-ratio  (/ (double free-memory) (double max-memory))))
+          (.set free-memory-ratio  (quot (* free-memory 100) max-memory)))
         (Thread/sleep free-memory-check-interval-ms))
       (catch InterruptedException _))))
 
@@ -136,7 +136,7 @@
         hot-target-size (if (.adaptive-sizing? cache)
                           (long (Math/pow (.size cache)
                                           (+ (.adaptive-break-even-level cache)
-                                             (double (.get free-memory-ratio)))))
+                                             (double (/ (.get free-memory-ratio) 100)))))
                           (.size cache))]
     (while (> (.size (.getHot cache)) hot-target-size)
       (when-let [vp ^ValuePointer (.poll cooling)]
